@@ -1,0 +1,297 @@
+// LgiMorales — Schema do Banco de Dados
+// Produtora audiovisual: gestão de clientes, eventos, entregas e portfólio
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// AUTENTICAÇÃO & USUÁRIOS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          UserRole  @default(ADMIN)
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+// ============================================
+// CLIENTES
+// ============================================
+
+enum ClientType {
+  MONTHLY    // Cliente com pacote mensal recorrente
+  ONE_TIME   // Cliente avulso (por projeto/evento)
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+model Client {
+  id              String       @id @default(cuid())
+  name            String
+  email           String       @unique
+  phone           String?
+  document        String?      // CPF ou CNPJ
+  company         String?      // Nome da empresa (se aplicável)
+  instagram       String?
+  type            ClientType   @default(ONE_TIME)
+  status          ClientStatus @default(ACTIVE)
+  notes           String?      // Observações gerais sobre o cliente
+  driveFolder     String?      // Link da pasta no Google Drive
+  avatarUrl       String?
+
+  // Autenticação no portal do cliente
+  portalPassword  String?      // Hash da senha para acesso ao portal
+  portalEnabled   Boolean      @default(false)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  events          Event[]
+  deliveries      Delivery[]
+
+  @@map("clients")
+}
+
+// ============================================
+// EVENTOS / PROJETOS
+// ============================================
+
+enum EventType {
+  STRATEGY        // Estratégia de posicionamento digital
+  SOCIAL_MEDIA    // Produção de fotos/vídeos para redes sociais
+  POST_PRODUCTION // Edição/pós-produção
+  EVENT_COVERAGE  // Cobertura de eventos presenciais
+  PHOTO_SHOOT     // Ensaios fotográficos/audiovisuais
+  BRANDING        // Criação de identidade visual
+  SOCIAL_MGMT     // Gestão de redes sociais
+  OTHER           // Outros
+}
+
+enum PipelineStage {
+  LEAD            // Primeiro contato / interesse
+  PROPOSAL        // Proposta enviada
+  CONTRACT        // Contrato fechado
+  PRODUCTION      // Em produção
+  EDITING         // Em edição / pós-produção
+  DELIVERY        // Material pronto para entrega
+  DELIVERED       // Entregue ao cliente
+  ARCHIVED        // Arquivado
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
+model Event {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  type            EventType
+  stage           PipelineStage @default(LEAD)
+  
+  // Datas
+  eventDate       DateTime?     // Data do evento/ensaio
+  contractDate    DateTime?     // Data de fechamento do contrato
+  deliveryDate    DateTime?     // Data prevista de entrega
+  deliveredAt     DateTime?     // Data real da entrega
+  
+  // Financeiro
+  totalValue      Float         @default(0)
+  paymentMethod   PaymentMethod?
+  
+  // Localização (para eventos presenciais)
+  location        String?
+  
+  // Google Drive
+  driveFolder     String?       // Link da pasta específica do evento no Drive
+  
+  // Notas internas
+  notes           String?
+
+  // Relacionamentos
+  clientId        String
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  installments    Installment[]
+  deliveries      Delivery[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clientId])
+  @@index([stage])
+  @@index([eventDate])
+  @@map("events")
+}
+
+// ============================================
+// PARCELAS / FINANCEIRO
+// ============================================
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Installment {
+  id            String            @id @default(cuid())
+  number        Int               // Número da parcela (1, 2, 3...)
+  value         Float
+  dueDate       DateTime
+  paidAt        DateTime?
+  status        InstallmentStatus @default(PENDING)
+  notes         String?
+
+  eventId       String
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([eventId])
+  @@index([dueDate])
+  @@map("installments")
+}
+
+// ============================================
+// ENTREGAS DE MATERIAL
+// ============================================
+
+enum DeliveryType {
+  PHOTOS        // Galeria de fotos editadas
+  VIDEO         // Vídeo editado (highlight, aftermovie)
+  ALBUM         // Álbum digital
+  RAW_FILES     // Arquivos brutos
+  OTHER         // Outros materiais
+}
+
+model Delivery {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  type          DeliveryType
+  driveLink     String?      // Link do Google Drive para o material
+  fileCount     Int?         // Quantidade de arquivos
+  fileSize      String?      // Tamanho aproximado (ex: "2.5 GB")
+  isPublished   Boolean      @default(false) // Visível no portal do cliente
+
+  eventId       String?
+  event         Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  clientId      String
+  client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([clientId])
+  @@index([eventId])
+  @@map("deliveries")
+}
+
+// ============================================
+// PORTFÓLIO (Site Institucional)
+// ============================================
+
+enum PortfolioCategory {
+  STRATEGY
+  SOCIAL_MEDIA
+  EVENT
+  PHOTO_SHOOT
+  BRANDING
+  ALL
+}
+
+model PortfolioItem {
+  id            String            @id @default(cuid())
+  title         String
+  description   String?
+  category      PortfolioCategory
+  imageUrl      String            // URL da imagem principal
+  videoUrl      String?           // URL do vídeo (se aplicável)
+  clientName    String?           // Nome do cliente (para exibição)
+  isPublished   Boolean           @default(true)
+  sortOrder     Int               @default(0)
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@map("portfolio_items")
+}
+
+// ============================================
+// DEPOIMENTOS
+// ============================================
+
+model Testimonial {
+  id            String    @id @default(cuid())
+  clientName    String
+  clientRole    String?   // Ex: "CEO da Empresa X", "Coach de Carreira"
+  content       String    // Texto do depoimento
+  rating        Int       @default(5) // 1-5 estrelas
+  avatarUrl     String?
+  isPublished   Boolean   @default(true)
+  sortOrder     Int       @default(0)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("testimonials")
+}
+
+// ============================================
+// LEADS (Formulário de Contato)
+// ============================================
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  LOST
+}
+
+model ContactLead {
+  id            String     @id @default(cuid())
+  name          String
+  email         String
+  phone         String?
+  message       String
+  service       String?    // Serviço de interesse
+  status        LeadStatus @default(NEW)
+  notes         String?    // Notas do admin sobre o lead
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@map("contact_leads")
+}

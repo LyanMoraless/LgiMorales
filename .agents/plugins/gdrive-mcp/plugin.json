@@ -1,0 +1,8 @@
+{
+  "name": "gdrive-mcp",
+  "description": "Google Drive MCP integration for LgiMorales client deliveries.",
+  "version": "1.0.0",
+  "mcpServers": [
+    "lgimorales-gdrive"
+  ]
+}

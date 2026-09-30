@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lgimorales-gdrive": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": {
+        "GDRIVE_API_KEY": ""
+      }
+    }
+  }
+}
